@@ -4,6 +4,10 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import authRoutes from './routes/auth.routes.js';
+import workspaceRoutes from './routes/workspace.routes.js';
+import projectRoutes from './routes/project.routes.js';
+import taskRoutes from './routes/task.routes.js';
+import collaborationRoutes from './routes/collaboration.routes.js';
 import { authenticateSession } from './middleware/auth.js';
 
 const app = express();
@@ -36,8 +40,12 @@ app.get('/api/v1/health', (_req: Request, res: Response) => {
   });
 });
 
-// Auth Routes
+// Mounted API Routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/workspaces', workspaceRoutes);
+app.use('/api/v1/workspaces/:workspaceId/projects', projectRoutes);
+app.use('/api/v1/workspaces/:workspaceId/tasks', taskRoutes);
+app.use('/api/v1', collaborationRoutes);
 
 // Centralized 404 handler
 app.use((_req: Request, res: Response) => {
