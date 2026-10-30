@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_COMMENT
+  PROJECT_INVITATION
+  UPCOMING_DEADLINE
+  STATUS_CHANGED
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  name          String
+  avatar        String?
+  bio           String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  sessions      Session[]
+  memberships   Membership[]
+  invitations   Invitation[]    @relation("InvitedByUser")
+  projectMembers ProjectMember[]
+  assignedTasks Task[]          @relation("AssignedTasks")
+  createdTasks  Task[]          @relation("CreatedTasks")
+  comments      Comment[]
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  token        String    @unique
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Workspace {
+  id           String          @id @default(uuid())
+  name         String
+  description  String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  memberships  Membership[]
+  invitations  Invitation[]
+  projects     Project[]
+  tasks        Task[]
+  activityLogs ActivityLog[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String        @id @default(uuid())
+  role        WorkspaceRole @default(MEMBER)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id          String        @id @default(uuid())
+  email       String
+  role        WorkspaceRole @default(MEMBER)
+  token       String        @unique
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviterId   String
+  inviter     User          @relation("InvitedByUser", fields: [inviterId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  accepted    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([token])
+  @@index([workspaceId])
+  @@map("invitations")
+}
+
+model Project {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus   @default(PLANNING)
+  priority    ProjectPriority @default(MEDIUM)
+  startDate   DateTime?
+  deadline    DateTime?
+  workspaceId String
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  members     ProjectMember[]
+  tasks       Task[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Task {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus    @default(TODO)
+  priority    TaskPriority  @default(MEDIUM)
+  dueDate     DateTime?
+  orderIndex  Int           @default(0)
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creatorId   String
+  creator     User          @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: Cascade)
+  assigneeId  String?
+  assignee    User?         @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  comments    Comment[]
+
+  @@index([workspaceId, status])
+  @@index([projectId])
+  @@index([assigneeId])
+  @@map("tasks")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("comments")
+}
+
+model ActivityLog {
+  id          String    @id @default(uuid())
+  action      String    // e.g. "TASK_CREATED", "STATUS_CHANGED", "PROJECT_CREATED"
+  entityType  String    // "TASK", "PROJECT", "WORKSPACE", "MEMBERSHIP"
+  entityId    String
+  details     String?   // JSON string with extra details (e.g. fromStatus, toStatus)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@map("activity_logs")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  link      String?
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}
