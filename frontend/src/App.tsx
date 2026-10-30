@@ -1,13 +1,24 @@
+import { RouterProvider } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from '@/hooks/useAuth';
+import { router } from './router';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 1,
+    },
+  },
+});
+
 export function App() {
   return (
-    <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-6">
-      <div className="bg-white p-8 rounded-2xl shadow-apple border border-[#E5E5EA] max-w-md w-full text-center">
-        <h1 className="text-2xl font-semibold text-[#1D1D1F] tracking-tight">DevFlow</h1>
-        <p className="text-sm text-[#86868B] mt-2">
-          Your Projects. Your Team. Your Progress.
-        </p>
-      </div>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
