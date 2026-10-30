@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
+import authRoutes from './routes/auth.routes.js';
+import { authenticateSession } from './middleware/auth.js';
 
 const app = express();
 
@@ -22,6 +24,9 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
+// Session authentication middleware on all routes
+app.use(authenticateSession);
+
 // Health check endpoint
 app.get('/api/v1/health', (_req: Request, res: Response) => {
   res.status(200).json({
@@ -30,6 +35,9 @@ app.get('/api/v1/health', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Auth Routes
+app.use('/api/v1/auth', authRoutes);
 
 // Centralized 404 handler
 app.use((_req: Request, res: Response) => {
