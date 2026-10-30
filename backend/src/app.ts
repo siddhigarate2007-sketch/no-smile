@@ -9,6 +9,8 @@ import projectRoutes from './routes/project.routes.js';
 import taskRoutes from './routes/task.routes.js';
 import collaborationRoutes from './routes/collaboration.routes.js';
 import { authenticateSession } from './middleware/auth.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerDocument } from './config/swagger.js';
 
 const app = express();
 
@@ -27,6 +29,9 @@ app.use(cookieParser(process.env.COOKIE_SECRET || 'devflow-cookie-secret-key'));
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
+
+// Swagger API Documentation
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Session authentication middleware on all routes
 app.use(authenticateSession);

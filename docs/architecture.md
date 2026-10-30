@@ -2,75 +2,53 @@
 
 ## 1. System Overview
 
-DevFlow is a full-stack developer productivity platform engineered with an Apple-inspired minimalist design philosophy. The architecture prioritizes clean separation of concerns, workspace isolation, type safety end-to-end, and sub-100ms UI interactions.
+DevFlow is an Apple-inspired minimalist SaaS platform designed for high-velocity software engineering teams. The system incorporates strict multi-tenant workspace isolation, persistent session management, role-based access control (RBAC), and an interactive drag-and-drop Kanban workflow.
 
-## 2. Technology Stack & Architectural Decisions
+```mermaid
+graph TD
+  Client[React 18 + Vite SPA Client]
+  Proxy[Vite Dev Proxy / Nginx Gateway]
+  Express[Node.js + Express 4.21 Application Server]
+  AuthMW[Session Authentication & Rate Limiting]
+  RBAC[Workspace RBAC Middleware]
+  Controllers[Layered Controllers]
+  Services[Business Logic Services]
+  Prisma[Prisma ORM 6.4 Client]
+  Postgres[(PostgreSQL 16 Database)]
 
-### Frontend
-- **Framework:** React 18 + TypeScript + Vite
-- **Styling:** Tailwind CSS with custom Apple design tokens (`#F5F5F7` canvas, `#FFFFFF` cards, `#1D1D1F` typography, `#86868B` subtle text, `#007AFF` accent)
-- **Component Primitives:** Headless accessible UI patterns inspired by shadcn/ui
-- **Icons:** Lucide React
-- **Client & Server State:** React Router DOM v6 + TanStack Query v5 (automatic caching, background refetching, optimistic updates)
-- **Forms & Validation:** React Hook Form + Zod
-- **Data Visualizations:** Recharts for productivity charts, completion distributions, velocity graphs
-- **Drag & Drop:** `@dnd-kit/core` & `@dnd-kit/sortable` for the 4-column interactive Kanban board
-
-### Backend
-- **Runtime:** Node.js (v26 LTS compatible) + Express.js
-- **Language:** TypeScript with strict type checking
-- **Architecture:** Layered Architecture:
-  `Routes -> Middleware -> Controllers -> Services -> Data Access (Prisma ORM) -> PostgreSQL`
-- **Security:** Helmet, CORS with explicit origin, Rate limiting, Argon2id/bcrypt password hashing, HttpOnly secure cookie-based session management
-- **Validation:** Zod request parsing on body, params, and queries
-- **Error Handling:** Centralized `AppError` and global error-handling middleware
-
-### Database & Persistence
-- **RDBMS:** PostgreSQL 16
-- **ORM:** Prisma ORM
-- **Key Characteristics:** UUID primary keys, normalized relationships, workspace-level tenant isolation, audit trails (`ActivityLog`), session persistence
-
-## 3. Directory Layout
-
-```
-devflow/
-├── frontend/
-│   ├── public/
-│   └── src/
-│       ├── assets/
-│       ├── components/
-│       │   ├── ui/
-│       │   ├── layout/
-│       │   └── features/
-│       ├── pages/
-│       ├── hooks/
-│       ├── services/
-│       ├── types/
-│       ├── schemas/
-│       ├── utils/
-│       └── main.tsx
-├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── validators/
-│   │   ├── utils/
-│   │   └── server.ts
-│   ├── prisma/
-│   │   ├── schema.prisma
-│   │   └── migrations/
-│   └── tests/
-├── docs/
-├── docker-compose.yml
-├── .env.example
-├── .gitignore
-├── README.md
-└── package.json
+  Client -->|HTTPS + HttpOnly Cookies| Proxy
+  Proxy --> Express
+  Express --> AuthMW
+  AuthMW --> RBAC
+  RBAC --> Controllers
+  Controllers --> Services
+  Services --> Prisma
+  Prisma --> Postgres
 ```
 
-## 4. Multi-Tenant Workspace Isolation
+---
 
-Every project, task, comment, invitation, and activity log is scoped to a `workspaceId`. Backend authorization middleware inspects user memberships and roles (`OWNER`, `ADMIN`, `MEMBER`) to prevent cross-workspace data leakage.
+## 2. Layered Architecture
+
+DevFlow follows a strict unidirectional data flow:
+
+1. **Routing Layer (`src/routes/`):** Defines clean RESTful resource URIs, validates request bodies and query parameters with Zod schemas, and enforces authentication / RBAC guards.
+2. **Middleware Layer (`src/middleware/`):**
+   - `helmet`: HTTP header hardening.
+   - `cors`: Strict origin validation with cookie authorization.
+   - `express-rate-limit`: Rate limiting on sensitive authentication routes (`/login`, `/register`).
+   - `authenticateSession`: Cryptographic session cookie lookup with DB validation.
+   - `requireWorkspaceRole`: Verifies tenant membership and role permissions (`OWNER`, `ADMIN`, `MEMBER`).
+   - `errorHandler`: Centralized operational error normalization (`AppError`).
+3. **Controller Layer (`src/controllers/`):** Parses inputs, coordinates service calls, and formats consistent HTTP JSON responses.
+4. **Service Layer (`src/services/`):** Core business logic, password hashing, multi-entity transactions, activity audit logging, and notification dispatches.
+5. **Persistence Layer (`prisma/`):** Type-safe database queries via Prisma ORM connecting to PostgreSQL with UUID primary keys.
+
+---
+
+## 3. Security Model
+
+- **Session Security:** Cookie-based session tokens generated using `crypto.randomBytes(32).toString('hex')`. Cookies are set with `HttpOnly: true`, `SameSite: Lax`, and `Secure: true` in production. Tokens are never stored in `localStorage`.
+- **Password Security:** Salted and hashed using `bcrypt` (12 rounds) with compatibility for Argon2id.
+- **Tenant Isolation:** Every Project, Task, Comment, and Activity Log belongs to a `workspaceId`. All database queries strictly scope records by `workspaceId`.
+- **Input Sanitization:** All payload formats are parsed and validated using Zod schemas before reaching business logic.

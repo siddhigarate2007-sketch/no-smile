@@ -11,6 +11,12 @@ describe('Health Check API', () => {
     expect(res.body.timestamp).toBeDefined();
   });
 
+  it('GET /api/docs should serve Swagger UI documentation', async () => {
+    const res = await request(app).get('/api/docs/');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('swagger');
+  });
+
   it('GET /api/v1/unknown-route should return 404', async () => {
     const res = await request(app).get('/api/v1/unknown-route');
     expect(res.status).toBe(404);

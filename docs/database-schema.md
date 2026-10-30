@@ -1,28 +1,114 @@
-# DevFlow Database Schema Documentation
+# DevFlow Database Schema Reference
 
-## 1. Overview
+## 1. Relational Entity Overview
 
-DevFlow uses a normalized PostgreSQL relational database schema managed through Prisma ORM. All entities use UUIDv4 identifiers, explicit foreign keys, indexes on critical access paths, and workspace-level containment.
+DevFlow uses PostgreSQL 16 managed through Prisma ORM. All entities use UUID v4 primary keys (`@id @default(uuid())`) and maintain automated timestamps (`createdAt`, `updatedAt`).
 
-## 2. Entity Relationship Summary
+```mermaid
+erDiagram
+    User ||--o{ Session : "authenticates"
+    User ||--o{ Membership : "belongs to"
+    User ||--o{ Task : "created/assigned"
+    User ||--o{ Comment : "authors"
+    User ||--o{ Notification : "receives"
+    User ||--o{ ActivityLog : "triggers"
 
-- **User**: Core account identity with hashed password, avatar, bio, and timestamps.
-- **Session**: Stateful authentication sessions stored in DB, tied to user and client IP/agent with expiry.
-- **Workspace**: Primary tenant container. All productivity assets belong to a workspace.
-- **Membership**: Junction entity establishing a User's role (`OWNER`, `ADMIN`, `MEMBER`) in a Workspace.
-- **Invitation**: Pending workspace invitations with cryptographically random tokens and expiration.
-- **Project**: Work initiative within a workspace with status (`PLANNING`, `ACTIVE`, `ON_HOLD`, `COMPLETED`) and priority (`LOW`, `MEDIUM`, `HIGH`).
-- **ProjectMember**: Explicit project-level assignment and permissions.
-- **Task**: Unit of work scoped to a project and workspace, with status (`TODO`, `IN_PROGRESS`, `IN_REVIEW`, `COMPLETED`), priority (`LOW`, `MEDIUM`, `HIGH`, `URGENT`), due dates, and assignee.
-- **Comment**: Discussion messages tied to a Task.
-- **ActivityLog**: Immutable audit trail of workspace events (e.g. task created, status changed, member invited).
-- **Notification**: User-level notifications for task assignments, comments, deadlines, and mentions.
+    Workspace ||--o{ Membership : "contains"
+    Workspace ||--o{ Project : "contains"
+    Workspace ||--o{ Task : "contains"
+    Workspace ||--o{ Invitation : "issues"
+    Workspace ||--o{ ActivityLog : "logs"
 
-## 3. Indexes & Constraints
+    Project ||--o{ ProjectMember : "assigned"
+    Project ||--o{ Task : "contains"
+    Task ||--o{ Comment : "discussion"
+```
 
-- `Session(token)`: Unique index for fast cookie lookup.
-- `Membership(userId, workspaceId)`: Compound unique index.
-- `Invitation(token)`: Unique index.
-- `Task(workspaceId, status)`: Compound index for Kanban column loading.
-- `Task(projectId)`: Foreign key index.
-- `ActivityLog(workspaceId, createdAt)`: Compound index for activity feeds.
+---
+
+## 2. Model Specifications
+
+### 2.1 `User`
+- `id` (UUID, PK)
+- `email` (VarChar, Unique, Indexed)
+- `passwordHash` (VarChar)
+- `name` (VarChar)
+- `avatar` (VarChar, Nullable)
+- `bio` (Text, Nullable)
+- `createdAt` / `updatedAt` (Timestamp)
+
+### 2.2 `Session`
+- `id` (UUID, PK)
+- `token` (VarChar, Unique, Indexed)
+- `userId` (UUID, FK -> User.id, Cascade)
+- `userAgent` (Text, Nullable)
+- `ipAddress` (VarChar, Nullable)
+- `expiresAt` (Timestamp, Indexed)
+- `createdAt` / `updatedAt` (Timestamp)
+
+### 2.3 `Workspace`
+- `id` (UUID, PK)
+- `name` (VarChar)
+- `description` (Text, Nullable)
+- `createdAt` / `updatedAt` (Timestamp)
+
+### 2.4 `Membership`
+- `id` (UUID, PK)
+- `role` (Enum: `OWNER`, `ADMIN`, `MEMBER`)
+- `userId` (UUID, FK -> User.id, Cascade)
+- `workspaceId` (UUID, FK -> Workspace.id, Cascade)
+- `createdAt` / `updatedAt` (Timestamp)
+- *Constraint:* `@@unique([userId, workspaceId])`
+
+### 2.5 `Project`
+- `id` (UUID, PK)
+- `name` (VarChar)
+- `description` (Text, Nullable)
+- `status` (Enum: `PLANNING`, `ACTIVE`, `ON_HOLD`, `COMPLETED`)
+- `priority` (Enum: `LOW`, `MEDIUM`, `HIGH`)
+- `startDate` (Timestamp, Nullable)
+- `deadline` (Timestamp, Nullable)
+- `workspaceId` (UUID, FK -> Workspace.id, Cascade)
+- `createdAt` / `updatedAt` (Timestamp)
+
+### 2.6 `Task`
+- `id` (UUID, PK)
+- `title` (VarChar)
+- `description` (Text, Nullable)
+- `status` (Enum: `TODO`, `IN_PROGRESS`, `IN_REVIEW`, `COMPLETED`)
+- `priority` (Enum: `LOW`, `MEDIUM`, `HIGH`, `URGENT`)
+- `dueDate` (Timestamp, Nullable)
+- `orderIndex` (Integer, Default 0)
+- `projectId` (UUID, FK -> Project.id, Cascade)
+- `workspaceId` (UUID, FK -> Workspace.id, Cascade)
+- `creatorId` (UUID, FK -> User.id, Cascade)
+- `assigneeId` (UUID, FK -> User.id, SetNull, Nullable)
+- `createdAt` / `updatedAt` (Timestamp)
+- *Index:* `@@index([workspaceId, status])`
+
+### 2.7 `Comment`
+- `id` (UUID, PK)
+- `content` (Text)
+- `taskId` (UUID, FK -> Task.id, Cascade)
+- `userId` (UUID, FK -> User.id, Cascade)
+- `createdAt` / `updatedAt` (Timestamp)
+
+### 2.8 `ActivityLog`
+- `id` (UUID, PK)
+- `action` (VarChar)
+- `entityType` (VarChar)
+- `entityId` (UUID)
+- `details` (JSON Text, Nullable)
+- `workspaceId` (UUID, FK -> Workspace.id, Cascade)
+- `userId` (UUID, FK -> User.id, Cascade)
+- `createdAt` (Timestamp)
+
+### 2.9 `Notification`
+- `id` (UUID, PK)
+- `type` (Enum: `TASK_ASSIGNED`, `TASK_COMMENT`, `PROJECT_INVITATION`, `UPCOMING_DEADLINE`, `STATUS_CHANGED`)
+- `title` (VarChar)
+- `message` (Text)
+- `read` (Boolean, Default false)
+- `link` (VarChar, Nullable)
+- `userId` (UUID, FK -> User.id, Cascade)
+- `createdAt` (Timestamp)

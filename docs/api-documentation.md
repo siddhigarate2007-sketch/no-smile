@@ -1,52 +1,112 @@
 # DevFlow REST API Documentation
 
-All API endpoints are prefixed with `/api/v1`.
-Authentication is managed via HttpOnly secure session cookies.
+Base URI: `/api/v1`  
+Interactive Swagger UI: `http://localhost:5000/api/docs`
 
-## Endpoints Overview
+---
 
-### Authentication
-- `POST /api/v1/auth/register` - Create a new user account + default personal workspace.
-- `POST /api/v1/auth/login` - Authenticate with email/password and set HttpOnly session cookie.
-- `POST /api/v1/auth/logout` - Invalidate session in DB and clear cookie.
-- `GET /api/v1/auth/me` - Fetch authenticated user profile & active workspaces.
+## 1. Authentication Endpoints
 
-### Workspaces
-- `GET /api/v1/workspaces` - List workspaces the user belongs to.
-- `POST /api/v1/workspaces` - Create a new workspace.
-- `GET /api/v1/workspaces/:workspaceId` - Get workspace details.
-- `PATCH /api/v1/workspaces/:workspaceId` - Update workspace name/description.
-- `DELETE /api/v1/workspaces/:workspaceId` - Delete workspace (Owner only).
+### `POST /api/v1/auth/register`
+Creates user, personal workspace, and sets HttpOnly session cookie.
+```json
+// Request
+{
+  "name": "Alex Rivera",
+  "email": "alex@devflow.io",
+  "password": "Password123!"
+}
 
-### Projects
-- `GET /api/v1/workspaces/:workspaceId/projects` - List projects (search, filter, pagination).
-- `POST /api/v1/workspaces/:workspaceId/projects` - Create a project.
-- `GET /api/v1/workspaces/:workspaceId/projects/:projectId` - Get project details + stats.
-- `PATCH /api/v1/workspaces/:workspaceId/projects/:projectId` - Update project.
-- `DELETE /api/v1/workspaces/:workspaceId/projects/:projectId` - Delete project.
+// Response (201 Created)
+{
+  "success": true,
+  "message": "Registration successful",
+  "data": {
+    "user": {
+      "id": "c1f7a2d4-...",
+      "email": "alex@devflow.io",
+      "name": "Alex Rivera"
+    },
+    "workspaces": [
+      {
+        "id": "e3a8b1c9-...",
+        "name": "Alex Rivera's Workspace",
+        "role": "OWNER"
+      }
+    ]
+  }
+}
+```
 
-### Tasks & Kanban
-- `GET /api/v1/workspaces/:workspaceId/tasks` - List tasks with status, priority, search filters.
-- `POST /api/v1/workspaces/:workspaceId/tasks` - Create task.
-- `GET /api/v1/workspaces/:workspaceId/tasks/:taskId` - Get task details with comments & logs.
-- `PATCH /api/v1/workspaces/:workspaceId/tasks/:taskId` - Update task (status, priority, assignee, etc.).
-- `PATCH /api/v1/workspaces/:workspaceId/tasks/:taskId/status` - Quick status update for Kanban drag-and-drop.
-- `DELETE /api/v1/workspaces/:workspaceId/tasks/:taskId` - Delete task.
+### `POST /api/v1/auth/login`
+Authenticates user, creates session record, and issues cookie.
+```json
+// Request
+{
+  "email": "alex@devflow.io",
+  "password": "Password123!"
+}
 
-### Team & Collaboration
-- `GET /api/v1/workspaces/:workspaceId/members` - List workspace members.
-- `POST /api/v1/workspaces/:workspaceId/invitations` - Create invitation token.
-- `POST /api/v1/invitations/accept` - Accept workspace invitation.
-- `PATCH /api/v1/workspaces/:workspaceId/members/:memberId` - Update member role.
-- `DELETE /api/v1/workspaces/:workspaceId/members/:memberId` - Remove member.
+// Response (200 OK)
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "user": { ... },
+    "workspaces": [ ... ]
+  }
+}
+```
 
-### Comments & Activities
-- `GET /api/v1/tasks/:taskId/comments` - List comments on task.
-- `POST /api/v1/tasks/:taskId/comments` - Post comment on task.
-- `GET /api/v1/workspaces/:workspaceId/activities` - Activity feed.
+### `POST /api/v1/auth/logout`
+Deletes session from database and clears cookie.
 
-### Notifications & Analytics
-- `GET /api/v1/notifications` - Get user notifications.
-- `PATCH /api/v1/notifications/:id/read` - Mark notification as read.
-- `PATCH /api/v1/notifications/read-all` - Mark all notifications read.
-- `GET /api/v1/workspaces/:workspaceId/analytics` - Summary stats, charts data, velocity.
+### `GET /api/v1/auth/me`
+Returns current authenticated user profile and workspaces.
+
+---
+
+## 2. Workspace Endpoints
+
+- `GET /api/v1/workspaces`: List workspaces for authenticated user.
+- `POST /api/v1/workspaces`: Create workspace (`{ "name": "...", "description": "..." }`).
+- `GET /api/v1/workspaces/:workspaceId`: Workspace details and stats.
+- `PATCH /api/v1/workspaces/:workspaceId`: Update workspace metadata.
+- `DELETE /api/v1/workspaces/:workspaceId`: Delete workspace (Owner only).
+
+---
+
+## 3. Project Endpoints
+
+- `GET /api/v1/workspaces/:workspaceId/projects`: List projects with status and search filters.
+- `POST /api/v1/workspaces/:workspaceId/projects`: Create project.
+- `GET /api/v1/workspaces/:workspaceId/projects/:projectId`: Project details with task counts.
+- `PATCH /api/v1/workspaces/:workspaceId/projects/:projectId`: Update project.
+- `DELETE /api/v1/workspaces/:workspaceId/projects/:projectId`: Delete project.
+
+---
+
+## 4. Task & Kanban Endpoints
+
+- `GET /api/v1/workspaces/:workspaceId/tasks`: List tasks by status/priority.
+- `POST /api/v1/workspaces/:workspaceId/tasks`: Create task.
+- `PATCH /api/v1/workspaces/:workspaceId/tasks/:taskId/status`: Quick drag-and-drop column move (`{ "status": "IN_PROGRESS", "orderIndex": 1 }`).
+- `PATCH /api/v1/workspaces/:workspaceId/tasks/:taskId`: Full task update.
+- `DELETE /api/v1/workspaces/:workspaceId/tasks/:taskId`: Delete task.
+
+---
+
+## 5. Team & Collaboration Endpoints
+
+- `GET /api/v1/workspaces/:workspaceId/members`: List workspace engineers and roles.
+- `POST /api/v1/workspaces/:workspaceId/invitations`: Generate secure 7-day invitation token.
+- `POST /api/v1/invitations/accept`: Accept invitation token.
+- `PATCH /api/v1/workspaces/:workspaceId/members/:memberId`: Update member role (Owner only).
+- `DELETE /api/v1/workspaces/:workspaceId/members/:memberId`: Remove member from workspace.
+- `GET /api/v1/tasks/:taskId/comments`: List comments for a task.
+- `POST /api/v1/tasks/:taskId/comments`: Post comment on task.
+- `GET /api/v1/workspaces/:workspaceId/activities`: Audit trail of workspace events.
+- `GET /api/v1/workspaces/:workspaceId/analytics`: Database-backed metrics, status breakdown, weekly trend.
+- `GET /api/v1/notifications`: List user notifications.
+- `PATCH /api/v1/notifications/:id/read`: Mark notification read.
+- `PATCH /api/v1/notifications/read-all`: Mark all read.
